@@ -1,0 +1,36 @@
+# Configuration des serveurs MCP
+# ================================
+
+servers:
+  flight:
+    name: "drone-flight"
+    host: "127.0.0.1"
+    port: 9001
+    description: "Contrôle de vol MAVLink — takeoff, goto, land, RTL, télémétrie"
+    mavlink_url: "udpin:0.0.0.0:14550"
+
+  vision:
+    name: "drone-vision"
+    host: "127.0.0.1"
+    port: 9002
+    description: "Analyse vidéo — détection objets, terrain, snapshots"
+    stream_url: "udp://0.0.0.0:5600"
+    model_path: "models/yolov8n.pt"
+
+  weather:
+    name: "drone-weather"
+    host: "127.0.0.1"
+    port: 9003
+    description: "Conditions météo — vent, visibilité, verdict de vol"
+
+  map:
+    name: "drone-map"
+    host: "127.0.0.1"
+    port: 9004
+    description: "Cartographie — waypoints, secteurs, exploration frontier"
+
+  mission:
+    name: "drone-mission"
+    host: "127.0.0.1"
+    port: 9005
+    description: "Journalisation — logs SQLite, rapports de mission"

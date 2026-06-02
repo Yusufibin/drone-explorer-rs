@@ -1,0 +1,59 @@
+[workspace]
+resolver = "2"
+members = [
+    "agent",
+    "servers/flight",
+    "servers/vision",
+    "servers/weather",
+    "servers/map",
+    "servers/mission",
+    "common",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Drone Explorer Team"]
+license = "MIT"
+description = "Drone autonome LLM + MCP — Ground Station en Rust"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+# Error handling
+anyhow = "1"
+thiserror = "2"
+# HTTP client
+reqwest = { version = "0.12", features = ["json"] }
+# MAVLink
+mavlink = { version = "0.14", features = ["ardupilotmega", "tokio-1"] }
+# OpenCV bindings
+opencv = { version = "0.93", features = ["clang-runtime"] }
+# SQLite
+rusqlite = { version = "0.32", features = ["bundled"] }
+# Config
+config = "0.14"
+# DateTime
+chrono = { version = "0.4", features = ["serde"] }
+# UUID
+uuid = { version = "1", features = ["v4", "serde"] }
+# Async channels
+async-channel = "2"
+# JSON-RPC (for MCP)
+jsonrpsee = { version = "0.24", features = ["server", "client", "macros"] }
+# GeoJSON / Geo
+geo = "0.29"
+geojson = "0.24"
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+
+# Async traits
+async-trait = "0.1"
+

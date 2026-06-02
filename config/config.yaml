@@ -1,0 +1,62 @@
+# Drone Explorer — Configuration principale
+# ==========================================
+
+# Le plan cible un système réel. Passe à true seulement pour développer
+# hors drone/caméra/API météo.
+simulation:
+  enabled: false
+
+# Configuration du drone (communication MAVLink)
+drone:
+  connection_string: "udpin:0.0.0.0:14550"
+  max_altitude: 80.0          # Altitude max légale FR (mètres)
+  max_speed: 15.0             # Vitesse max (m/s)
+  geofence_radius: 200.0      # Rayon géofence (mètres)
+  failsafe_battery_percent: 25.0
+  failsafe_gcs_timeout_secs: 5
+
+# Configuration LLM (via OpenRouter)
+llm:
+  api_key: "${OPENROUTER_API_KEY}"
+  base_url: "https://openrouter.ai/api/v1"
+  default_model: "deepseek/deepseek-chat"
+  navigation_model: "deepseek/deepseek-chat"
+  vision_model: "anthropic/claude-sonnet-4"
+  critical_model: "anthropic/claude-sonnet-4"
+  planning_model: "anthropic/claude-opus-4"
+  max_tokens: 1024
+  temperature: 0.3
+
+# Configuration Vision (stream vidéo)
+vision:
+  stream_url: "udp://0.0.0.0:5600"
+  yolo_model_path: "models/yolov8n.pt"
+  min_confidence: 0.5
+  snapshot_dir: "snapshots/"
+
+# Configuration Météo (OpenWeatherMap)
+weather:
+  api_key: "${OPENWEATHER_API_KEY}"
+  lat: 48.8566
+  lon: 2.3522
+
+# Configuration Mission (journalisation)
+mission:
+  db_path: "data/mission.db"
+  reports_dir: "reports/"
+
+# Configuration Carte
+map:
+  center_lat: 48.8566
+  center_lon: 2.3522
+  grid_size: 500.0            # Taille totale de la grille (mètres)
+  sector_size: 100.0          # Taille d'un secteur (mètres)
+
+# Port de base pour les serveurs MCP
+mcp_server_port: 9001
+# Les serveurs utilisent les ports :
+#   flight  → 9001
+#   vision  → 9002
+#   weather → 9003
+#   map     → 9004
+#   mission → 9005

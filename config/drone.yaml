@@ -1,0 +1,28 @@
+# Paramètres physiques du drone — ArduPilot
+# ============================================
+
+# Failsafes
+FS_BATT_ENABLE: 1          # Failsafe batterie activé
+FS_BATT_VOLTAGE: 14.2      # RTH si tension < 14.2V (4S)
+FS_BATT_MAH: 400           # RTH si < 400 mAh restants
+FS_THR_ENABLE: 1           # Failsafe perte signal RC
+FS_GCS_ENABLE: 1           # Failsafe perte GCS (WiFi)
+FS_GCS_TIMEOUT: 5          # RTH si WiFi coupé > 5s
+
+# Geofence
+FENCE_ENABLE: 1            # Geofence activée
+FENCE_TYPE: 3              # Cercle + altitude max
+FENCE_RADIUS: 200          # Rayon max 200m du point de départ
+FENCE_ALT_MAX: 80          # Altitude max 80m (légal FR)
+
+# Performance
+WPNAV_SPEED: 500           # Vitesse de croisière (cm/s) = 5 m/s
+WPNAV_SPEED_UP: 300        # Vitesse montée (cm/s)
+WPNAV_SPEED_DN: 150        # Vitesse descente (cm/s)
+WPNAV_RADIUS: 200          # Rayon acceptance waypoint (cm)
+
+# Batterie
+BATT_MONITOR: 4            # Type batterie : voltage + courant
+BATT_CAPACITY: 3000        # Capacité batterie (mAh)
+BATT_LOW_VOLT: 14.4        # Alerte batterie basse (V)
+BATT_CRT_VOLT: 14.0        # Batterie critique (V)

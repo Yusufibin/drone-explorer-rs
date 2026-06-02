@@ -1,0 +1,23 @@
+[package]
+name = "weather-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Serveur MCP pour récupérer les données météo OpenWeatherMap"
+
+[dependencies]
+common = { path = "../../common" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+reqwest = { workspace = true }
+jsonrpsee = { workspace = true }
+clap = { workspace = true }
+chrono = { workspace = true }
+async-trait = { workspace = true }
+
