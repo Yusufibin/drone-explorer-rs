@@ -115,7 +115,7 @@ pub async fn start_server(
     detector: ObjectDetector,
     port: u16,
 ) -> anyhow::Result<()> {
-    let addr = format!("0.0.0.0:{}", port);
+    let addr = format!("127.0.0.1:{}", port);
     let server = ServerBuilder::default().build(&addr).await?;
 
     let rpc_impl = VisionRpcServer::new(reader, detector);

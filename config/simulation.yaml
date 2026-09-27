@@ -4,11 +4,11 @@
 # Le plan cible un système réel. Passe à true seulement pour développer
 # hors drone/caméra/API météo.
 simulation:
-  enabled: false
+  enabled: true
 
 # Configuration du drone (communication MAVLink)
 drone:
-  connection_string: "udpin:0.0.0.0:14550"
+  connection_string: "sim://mavlink"
   max_altitude: 80.0          # Altitude plafond opérationnel configuré (mètres)
   max_speed: 15.0             # Vitesse max (m/s)
   geofence_radius: 200.0      # Rayon géofence (mètres)
@@ -29,14 +29,14 @@ llm:
 
 # Configuration Vision (stream vidéo)
 vision:
-  stream_url: "udp://0.0.0.0:5600"
-  yolo_model_path: "models/yolov8n.pt"
+  stream_url: "sim://camera"
+  yolo_model_path: "sim://yolo"
   min_confidence: 0.5
   snapshot_dir: "snapshots/"
 
 # Configuration Météo (OpenWeatherMap)
 weather:
-  api_key: "${OPENWEATHER_API_KEY}"
+  api_key: "sim://openweather"
   lat: 48.8566
   lon: 2.3522
 

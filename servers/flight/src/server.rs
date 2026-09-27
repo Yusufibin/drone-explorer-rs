@@ -53,7 +53,7 @@ impl FlightMcpRpcServer for FlightRpcServer {
 
     async fn goto(&self, lat: f64, lon: f64, alt: f64) -> Result<Value, ErrorObjectOwned> {
         // Enforce geofence and safety checks in the GOTO RPC call
-        match self.bridge.safe_goto(lat, lon, alt, 80.0, 20.0).await {
+        match self.bridge.goto(lat, lon, alt).await {
             Ok(success) => Ok(serde_json::to_value(tool_result_ok(success)).unwrap()),
             Err(e) => Ok(serde_json::to_value(tool_result_err(e.to_string())).unwrap()),
         }
@@ -104,7 +104,7 @@ impl FlightMcpRpcServer for FlightRpcServer {
 
 /// Démarre le serveur JSON-RPC pour le contrôle de vol.
 pub async fn start_server(bridge: MavlinkBridge, port: u16) -> anyhow::Result<()> {
-    let addr = format!("0.0.0.0:{}", port);
+    let addr = format!("127.0.0.1:{}", port);
     let server = ServerBuilder::default().build(&addr).await?;
 
     let rpc_impl = FlightRpcServer::new(bridge);

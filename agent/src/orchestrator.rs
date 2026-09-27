@@ -3,11 +3,10 @@ use crate::mcp_clients::McpClients;
 use crate::memory::MissionMemory;
 use crate::prompter::Prompter;
 use async_channel::{Receiver, Sender};
-use chrono::Utc;
 use common::config::AppConfig;
 use common::error::DroneError;
 use common::mcp::McpToolCall;
-use common::types::{BatteryStatus, MissionEvent, Telemetry};
+use common::types::MissionEvent;
 use serde_json::json;
 use std::time::Duration;
 
@@ -28,7 +27,7 @@ impl Orchestrator {
     pub async fn new(config: AppConfig) -> Result<Self, DroneError> {
         let (event_tx, event_rx) = async_channel::bounded(100);
         let mcp_clients = McpClients::new(&config).await?;
-        let llm = LlmClient::new(&config.llm);
+        let llm = LlmClient::new(&config.llm, config.simulation.enabled);
         let memory = MissionMemory::new();
 
         Ok(Self {
@@ -49,8 +48,6 @@ impl Orchestrator {
             "Démarrage de la mission autonome : \"{}\"",
             mission_description
         );
-        self.mission_active = true;
-
         // 1. Enregistrement de la session de mission dans mission-mcp
         let init_res = self
             .mcp_clients
@@ -64,15 +61,14 @@ impl Orchestrator {
             .await?;
 
         if init_res.success {
-            let mid = init_res.data.as_str().unwrap_or("").to_string();
+            let mid = init_res.data.as_str().filter(|id| !id.is_empty())
+                .ok_or_else(|| DroneError::Mission("ID de mission absent".into()))?.to_string();
             self.mission_id = Some(mid.clone());
             tracing::info!("Session de mission créée dans SQLite avec ID: {}", mid);
         } else {
-            tracing::error!(
-                "Impossible de créer la session de mission dans mission-mcp: {:?}",
-                init_res.error
-            );
+            return Err(DroneError::Mission(format!("Création de mission refusée: {:?}", init_res.error)));
         }
+        self.mission_active = true;
 
         // 2. Lancer la tâche périodique (PeriodicTick toutes les 15 secondes)
         let tx_clone = self.event_tx.clone();
@@ -94,9 +90,15 @@ impl Orchestrator {
         // 4. Boucle principale ReAct
         while self.mission_active {
             tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    self.emergency_rtl("Arrêt demandé").await?;
+                }
                 event_opt = self.event_rx.recv() => {
                     if let Ok(event) = event_opt {
-                        self.process_event(event, mission_description).await?;
+                        if let Err(error) = self.process_event(event, mission_description).await {
+                            self.emergency_rtl("Erreur de mission").await?;
+                            return Err(error);
+                        }
                     }
                 }
             }
@@ -129,14 +131,7 @@ impl Orchestrator {
                 battery,
                 self.config.drone.failsafe_battery_percent
             );
-            let _ = self
-                .mcp_clients
-                .call_tool(&McpToolCall {
-                    name: "rtl".to_string(),
-                    arguments: json!({}),
-                })
-                .await?;
-            self.mission_active = false;
+            self.emergency_rtl("Batterie critique").await?;
             return Ok(());
         }
 
@@ -154,14 +149,7 @@ impl Orchestrator {
                 "FAILSAFE MÉTÉO: Danger de vol détecté ({})! Ordre RTL immédiat.",
                 reason
             );
-            let _ = self
-                .mcp_clients
-                .call_tool(&McpToolCall {
-                    name: "rtl".to_string(),
-                    arguments: json!({}),
-                })
-                .await?;
-            self.mission_active = false;
+            self.emergency_rtl("Météo dangereuse").await?;
             return Ok(());
         }
 
@@ -237,14 +225,17 @@ impl Orchestrator {
                             arguments: json!({ "lat": lat, "lon": lon, "alt": alt }),
                         };
                         let goto_res = self.mcp_clients.call_tool(&goto_call).await?;
+                        if !goto_res.success {
+                            return Err(DroneError::Mission(format!("Navigation refusée: {:?}", goto_res.error)));
+                        }
                         self.memory.add_decision(
                             "Navigation automatique vers le secteur exploré",
                             goto_call,
                             goto_res,
                         );
                     }
-                } else if tool_call.name == "goto" {
-                    // Simuler l'arrivée après un certain temps (pour le test autonome hors vol réel)
+                } else if tool_call.name == "goto" && self.config.simulation.enabled {
+                    // Événement synthétique réservé au simulateur.
                     let tx_clone = self.event_tx.clone();
                     let lat = tool_call
                         .arguments
@@ -306,7 +297,7 @@ impl Orchestrator {
                     }
                 } else if tool_call.name == "complete_mission" {
                     tracing::warn!("Mission terminée avec succès par décision LLM.");
-                    self.mission_active = false;
+                    self.emergency_rtl("Mission terminée").await?;
                 }
             } else {
                 tracing::error!(
@@ -314,6 +305,9 @@ impl Orchestrator {
                     tool_call.name,
                     result.error
                 );
+                if matches!(tool_call.name.as_str(), "takeoff" | "goto" | "land" | "rtl" | "loiter" | "set_speed") {
+                    return Err(DroneError::Mission(format!("Commande de vol refusée: {:?}", result.error)));
+                }
             }
 
             self.memory
@@ -341,7 +335,7 @@ impl Orchestrator {
                     }),
                 }).await?;
             }
-            self.mission_active = false;
+            self.emergency_rtl("Couverture atteinte").await?;
         }
 
         Ok(())
@@ -349,57 +343,29 @@ impl Orchestrator {
 
     /// Récupère la télémétrie, la batterie, la météo et la couverture courante depuis les microservices MCP.
     async fn collect_context(&self) -> Result<serde_json::Value, DroneError> {
-        let telemetry = self.mcp_clients.get_telemetry().await.unwrap_or(Telemetry {
-            position: common::types::GpsPosition {
-                lat: 48.8566,
-                lon: 2.3522,
-                alt: 0.0,
-            },
-            heading: 0.0,
-            speed: 0.0,
-            mode: common::types::FlightMode::Manual,
-            armed: false,
-            timestamp: Utc::now(),
-        });
-
-        let battery = self
-            .mcp_clients
-            .get_battery()
-            .await
-            .unwrap_or(BatteryStatus {
-                percent: 100.0,
-                voltage: 16.8,
-                remaining_minutes: Some(25.0),
-            });
+        let telemetry = self.mcp_clients.get_telemetry().await?;
+        let battery = self.mcp_clients.get_battery().await?;
+        if !battery.percent.is_finite() || !(0.0..=100.0).contains(&battery.percent) {
+            return Err(DroneError::Mission("Batterie invalide".into()));
+        }
 
         let coverage = self.mcp_clients.get_coverage().await.unwrap_or(0.0);
 
         // Appel météo
-        let weather_safe = self
+        let weather = self
             .mcp_clients
             .call_tool(&McpToolCall {
                 name: "is_safe_to_fly".to_string(),
                 arguments: serde_json::Value::Null,
             })
             .await
-            .map(|r| r.success && r.data.get("safe").and_then(|v| v.as_bool()).unwrap_or(true))
-            .unwrap_or(true);
-
-        let weather_reason = self
-            .mcp_clients
-            .call_tool(&McpToolCall {
-                name: "is_safe_to_fly".to_string(),
-                arguments: serde_json::Value::Null,
-            })
-            .await
-            .ok()
-            .and_then(|r| {
-                r.data
-                    .get("reason")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            })
-            .unwrap_or_else(|| "Conditions de vol optimales.".to_string());
+            ?;
+        if !weather.success {
+            return Err(DroneError::Weather(weather.error.unwrap_or_else(|| "Météo indisponible".into())));
+        }
+        let weather_safe = weather.data.get("safe").and_then(|v| v.as_bool())
+            .ok_or_else(|| DroneError::Weather("Verdict météo absent".into()))?;
+        let weather_reason = weather.data.get("reason").and_then(|v| v.as_str()).unwrap_or("Conditions inconnues");
 
         Ok(json!({
             "lat": telemetry.position.lat,
@@ -411,5 +377,17 @@ impl Orchestrator {
             "weather_safe": weather_safe,
             "weather_reason": weather_reason
         }))
+    }
+
+    async fn emergency_rtl(&mut self, reason: &str) -> Result<(), DroneError> {
+        tracing::warn!("Arrêt de mission: {}. Demande RTL.", reason);
+        self.mission_active = false;
+        let result = self.mcp_clients.call_tool(&McpToolCall {
+            name: "rtl".into(), arguments: json!({}),
+        }).await?;
+        if !result.success {
+            return Err(DroneError::Mission(format!("RTL refusé: {:?}", result.error)));
+        }
+        Ok(())
     }
 }
