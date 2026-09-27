@@ -26,15 +26,9 @@ pub struct AppConfig {
 
 /// Configuration du mode simulation. Le plan cible le réel; la simulation doit
 /// rester explicite pour éviter de masquer une intégration manquante.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SimulationConfig {
     pub enabled: bool,
-}
-
-impl Default for SimulationConfig {
-    fn default() -> Self {
-        Self { enabled: false }
-    }
 }
 
 /// Configuration de la connexion au drone.
