@@ -9,7 +9,9 @@ use serde_json::{Value, json};
 use std::time::Duration;
 
 fn required_number(args: &Value, key: &str) -> Result<f64, DroneError> {
-    let value = args.get(key).and_then(Value::as_f64)
+    let value = args
+        .get(key)
+        .and_then(Value::as_f64)
         .ok_or_else(|| DroneError::Mcp(format!("Paramètre numérique requis: {}", key)))?;
     if !value.is_finite() {
         return Err(DroneError::Mcp(format!("Paramètre non fini: {}", key)));
@@ -31,9 +33,12 @@ impl McpClients {
     pub async fn new(config: &AppConfig) -> Result<Self, DroneError> {
         let build_client = |port: u16| -> Result<HttpClient, DroneError> {
             let url = format!("http://127.0.0.1:{}", port);
-            HttpClientBuilder::default().request_timeout(Duration::from_secs(5)).build(&url).map_err(|e| {
-                DroneError::Mcp(format!("Erreur de connexion client sur '{}': {}", url, e))
-            })
+            HttpClientBuilder::default()
+                .request_timeout(Duration::from_secs(5))
+                .build(&url)
+                .map_err(|e| {
+                    DroneError::Mcp(format!("Erreur de connexion client sur '{}': {}", url, e))
+                })
         };
 
         Ok(Self {

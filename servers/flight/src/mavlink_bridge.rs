@@ -45,7 +45,9 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_invalid_takeoff_and_targets() {
-        let bridge = MavlinkBridge::new("sim://mavlink").with_limits(30.0, 8.0, 100.0, 25.0).unwrap();
+        let bridge = MavlinkBridge::new("sim://mavlink")
+            .with_limits(30.0, 8.0, 100.0, 25.0)
+            .unwrap();
         bridge.connect().await.unwrap();
         assert!(bridge.takeoff(f64::NAN).await.is_err());
         assert!(bridge.takeoff(31.0).await.is_err());
@@ -60,7 +62,10 @@ mod tests {
     async fn refuses_flight_on_low_battery() {
         let bridge = MavlinkBridge::new("sim://mavlink");
         bridge.state.lock().await.battery_percent = 20.0;
-        assert!(matches!(bridge.takeoff(10.0).await, Err(DroneError::BatteryCritical(_))));
+        assert!(matches!(
+            bridge.takeoff(10.0).await,
+            Err(DroneError::BatteryCritical(_))
+        ));
     }
 }
 
@@ -109,10 +114,22 @@ impl MavlinkBridge {
         }
     }
 
-    pub fn with_limits(mut self, max_altitude: f64, max_speed: f64, geofence_radius: f64, min_battery: f32) -> Result<Self, DroneError> {
-        if !max_altitude.is_finite() || max_altitude <= 0.0 || !max_speed.is_finite() || max_speed <= 0.0
-            || !geofence_radius.is_finite() || geofence_radius <= 0.0 || !min_battery.is_finite()
-            || !(0.0..=100.0).contains(&min_battery) {
+    pub fn with_limits(
+        mut self,
+        max_altitude: f64,
+        max_speed: f64,
+        geofence_radius: f64,
+        min_battery: f32,
+    ) -> Result<Self, DroneError> {
+        if !max_altitude.is_finite()
+            || max_altitude <= 0.0
+            || !max_speed.is_finite()
+            || max_speed <= 0.0
+            || !geofence_radius.is_finite()
+            || geofence_radius <= 0.0
+            || !min_battery.is_finite()
+            || !(0.0..=100.0).contains(&min_battery)
+        {
             return Err(DroneError::Config("Limites de vol invalides".into()));
         }
         self.max_altitude = max_altitude;
@@ -151,7 +168,10 @@ impl MavlinkBridge {
 
                 // 2. Déplacement physique si en mode GUIDED/AUTO et vers une cible
                 if let Some(target) = state.target_position {
-                    if matches!(state.mode, FlightMode::Guided | FlightMode::Auto | FlightMode::Rtl | FlightMode::Land) {
+                    if matches!(
+                        state.mode,
+                        FlightMode::Guided | FlightMode::Auto | FlightMode::Rtl | FlightMode::Land
+                    ) {
                         let d_lat = target.lat - state.position.lat;
                         let d_lon = target.lon - state.position.lon;
                         let d_alt = target.alt - state.position.alt;
@@ -365,8 +385,11 @@ impl MavlinkBridge {
 
     fn validate_target(&self, lat: f64, lon: f64, alt: f64) -> Result<(), DroneError> {
         self.validate_altitude(alt)?;
-        if !lat.is_finite() || !lon.is_finite() || !(-90.0..=90.0).contains(&lat)
-            || !(-180.0..=180.0).contains(&lon) {
+        if !lat.is_finite()
+            || !lon.is_finite()
+            || !(-90.0..=90.0).contains(&lat)
+            || !(-180.0..=180.0).contains(&lon)
+        {
             return Err(DroneError::Config("Coordonnées GPS invalides".into()));
         }
         let home = SimState::default().position;

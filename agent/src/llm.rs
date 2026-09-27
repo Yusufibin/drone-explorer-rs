@@ -25,8 +25,10 @@ impl LlmClient {
     pub fn new(config: &LlmConfig, simulation: bool) -> Self {
         Self {
             config: config.clone(),
-            client: reqwest::Client::builder().timeout(std::time::Duration::from_secs(20))
-                .build().expect("configuration HTTP valide"),
+            client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(20))
+                .build()
+                .expect("configuration HTTP valide"),
             simulation,
         }
     }
@@ -78,7 +80,10 @@ impl LlmClient {
             .client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.config.api_key))
-            .header("HTTP-Referer", "https://github.com/Yusufibin/drone-explorer-rs")
+            .header(
+                "HTTP-Referer",
+                "https://github.com/Yusufibin/drone-explorer-rs",
+            )
             .json(&body)
             .send()
             .await
@@ -107,17 +112,13 @@ impl LlmClient {
                             }
                             Err(DroneError::Llm("Réponse LLM vide ou incorrecte".into()))
                         }
-                        Err(e) => {
-                            Err(DroneError::Llm(format!("Réponse LLM invalide: {}", e)))
-                        }
+                        Err(e) => Err(DroneError::Llm(format!("Réponse LLM invalide: {}", e))),
                     }
                 } else {
                     Err(DroneError::Llm(format!("HTTP LLM: {}", resp.status())))
                 }
             }
-            Err(e) => {
-                Err(DroneError::Llm(format!("Erreur réseau LLM: {}", e)))
-            }
+            Err(e) => Err(DroneError::Llm(format!("Erreur réseau LLM: {}", e))),
         }
     }
 

@@ -36,7 +36,10 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Démarrage de flight-mcp...");
     let bridge = MavlinkBridge::new(&args.mavlink_url).with_limits(
-        args.max_altitude, args.max_speed, args.geofence_radius, args.min_battery,
+        args.max_altitude,
+        args.max_speed,
+        args.geofence_radius,
+        args.min_battery,
     )?;
 
     // Tentative de connexion

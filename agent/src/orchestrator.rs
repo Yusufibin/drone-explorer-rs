@@ -61,12 +61,19 @@ impl Orchestrator {
             .await?;
 
         if init_res.success {
-            let mid = init_res.data.as_str().filter(|id| !id.is_empty())
-                .ok_or_else(|| DroneError::Mission("ID de mission absent".into()))?.to_string();
+            let mid = init_res
+                .data
+                .as_str()
+                .filter(|id| !id.is_empty())
+                .ok_or_else(|| DroneError::Mission("ID de mission absent".into()))?
+                .to_string();
             self.mission_id = Some(mid.clone());
             tracing::info!("Session de mission créée dans SQLite avec ID: {}", mid);
         } else {
-            return Err(DroneError::Mission(format!("Création de mission refusée: {:?}", init_res.error)));
+            return Err(DroneError::Mission(format!(
+                "Création de mission refusée: {:?}",
+                init_res.error
+            )));
         }
         self.mission_active = true;
 
@@ -226,7 +233,10 @@ impl Orchestrator {
                         };
                         let goto_res = self.mcp_clients.call_tool(&goto_call).await?;
                         if !goto_res.success {
-                            return Err(DroneError::Mission(format!("Navigation refusée: {:?}", goto_res.error)));
+                            return Err(DroneError::Mission(format!(
+                                "Navigation refusée: {:?}",
+                                goto_res.error
+                            )));
                         }
                         self.memory.add_decision(
                             "Navigation automatique vers le secteur exploré",
@@ -305,8 +315,14 @@ impl Orchestrator {
                     tool_call.name,
                     result.error
                 );
-                if matches!(tool_call.name.as_str(), "takeoff" | "goto" | "land" | "rtl" | "loiter" | "set_speed") {
-                    return Err(DroneError::Mission(format!("Commande de vol refusée: {:?}", result.error)));
+                if matches!(
+                    tool_call.name.as_str(),
+                    "takeoff" | "goto" | "land" | "rtl" | "loiter" | "set_speed"
+                ) {
+                    return Err(DroneError::Mission(format!(
+                        "Commande de vol refusée: {:?}",
+                        result.error
+                    )));
                 }
             }
 
@@ -358,14 +374,22 @@ impl Orchestrator {
                 name: "is_safe_to_fly".to_string(),
                 arguments: serde_json::Value::Null,
             })
-            .await
-            ?;
+            .await?;
         if !weather.success {
-            return Err(DroneError::Weather(weather.error.unwrap_or_else(|| "Météo indisponible".into())));
+            return Err(DroneError::Weather(
+                weather.error.unwrap_or_else(|| "Météo indisponible".into()),
+            ));
         }
-        let weather_safe = weather.data.get("safe").and_then(|v| v.as_bool())
+        let weather_safe = weather
+            .data
+            .get("safe")
+            .and_then(|v| v.as_bool())
             .ok_or_else(|| DroneError::Weather("Verdict météo absent".into()))?;
-        let weather_reason = weather.data.get("reason").and_then(|v| v.as_str()).unwrap_or("Conditions inconnues");
+        let weather_reason = weather
+            .data
+            .get("reason")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Conditions inconnues");
 
         Ok(json!({
             "lat": telemetry.position.lat,
@@ -382,11 +406,18 @@ impl Orchestrator {
     async fn emergency_rtl(&mut self, reason: &str) -> Result<(), DroneError> {
         tracing::warn!("Arrêt de mission: {}. Demande RTL.", reason);
         self.mission_active = false;
-        let result = self.mcp_clients.call_tool(&McpToolCall {
-            name: "rtl".into(), arguments: json!({}),
-        }).await?;
+        let result = self
+            .mcp_clients
+            .call_tool(&McpToolCall {
+                name: "rtl".into(),
+                arguments: json!({}),
+            })
+            .await?;
         if !result.success {
-            return Err(DroneError::Mission(format!("RTL refusé: {:?}", result.error)));
+            return Err(DroneError::Mission(format!(
+                "RTL refusé: {:?}",
+                result.error
+            )));
         }
         Ok(())
     }

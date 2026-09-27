@@ -143,19 +143,46 @@ impl AppConfig {
     }
 
     pub fn validate(&self) -> anyhow::Result<()> {
-        anyhow::ensure!(self.mcp_server_port <= u16::MAX - 4, "Ports MCP hors limites");
-        anyhow::ensure!(self.drone.max_altitude.is_finite() && self.drone.max_altitude > 0.0, "Altitude maximale invalide");
-        anyhow::ensure!(self.drone.max_speed.is_finite() && self.drone.max_speed > 0.0, "Vitesse maximale invalide");
-        anyhow::ensure!(self.drone.geofence_radius.is_finite() && self.drone.geofence_radius > 0.0, "Geofence invalide");
-        anyhow::ensure!(self.drone.failsafe_battery_percent.is_finite() && (0.0..=100.0).contains(&self.drone.failsafe_battery_percent), "Seuil batterie invalide");
-        anyhow::ensure!(self.weather.lat.is_finite() && (-90.0..=90.0).contains(&self.weather.lat)
-            && self.weather.lon.is_finite() && (-180.0..=180.0).contains(&self.weather.lon), "Coordonnées météo invalides");
+        anyhow::ensure!(
+            self.mcp_server_port <= u16::MAX - 4,
+            "Ports MCP hors limites"
+        );
+        anyhow::ensure!(
+            self.drone.max_altitude.is_finite() && self.drone.max_altitude > 0.0,
+            "Altitude maximale invalide"
+        );
+        anyhow::ensure!(
+            self.drone.max_speed.is_finite() && self.drone.max_speed > 0.0,
+            "Vitesse maximale invalide"
+        );
+        anyhow::ensure!(
+            self.drone.geofence_radius.is_finite() && self.drone.geofence_radius > 0.0,
+            "Geofence invalide"
+        );
+        anyhow::ensure!(
+            self.drone.failsafe_battery_percent.is_finite()
+                && (0.0..=100.0).contains(&self.drone.failsafe_battery_percent),
+            "Seuil batterie invalide"
+        );
+        anyhow::ensure!(
+            self.weather.lat.is_finite()
+                && (-90.0..=90.0).contains(&self.weather.lat)
+                && self.weather.lon.is_finite()
+                && (-180.0..=180.0).contains(&self.weather.lon),
+            "Coordonnées météo invalides"
+        );
         if self.simulation.enabled {
-            anyhow::ensure!(self.drone.connection_string.starts_with("sim://") && self.vision.stream_url.starts_with("sim://")
-                && self.vision.yolo_model_path.starts_with("sim://") && self.weather.api_key == "sim://openweather",
-                "Simulation incohérente : utiliser uniquement des services sim://");
+            anyhow::ensure!(
+                self.drone.connection_string.starts_with("sim://")
+                    && self.vision.stream_url.starts_with("sim://")
+                    && self.vision.yolo_model_path.starts_with("sim://")
+                    && self.weather.api_key == "sim://openweather",
+                "Simulation incohérente : utiliser uniquement des services sim://"
+            );
         } else {
-            anyhow::bail!("Vol réel désactivé : le contrôle MAVLink, la vidéo et l'inférence ne sont pas implémentés. Utiliser config/simulation.yaml pour les essais.");
+            anyhow::bail!(
+                "Vol réel désactivé : le contrôle MAVLink, la vidéo et l'inférence ne sont pas implémentés. Utiliser config/simulation.yaml pour les essais."
+            );
         }
         Ok(())
     }
@@ -204,7 +231,9 @@ mod tests {
 
     #[test]
     fn config_rejects_real_mode_and_accepts_simulator() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap();
         let sim = root.join("config/simulation.yaml");
         assert!(AppConfig::load(sim.to_str().unwrap()).is_ok());
         let real = root.join("config/config.yaml");
