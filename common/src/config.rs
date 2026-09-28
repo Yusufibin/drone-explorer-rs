@@ -26,15 +26,9 @@ pub struct AppConfig {
 
 /// Configuration du mode simulation. Le plan cible le réel; la simulation doit
 /// rester explicite pour éviter de masquer une intégration manquante.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SimulationConfig {
     pub enabled: bool,
-}
-
-impl Default for SimulationConfig {
-    fn default() -> Self {
-        Self { enabled: false }
-    }
 }
 
 /// Configuration de la connexion au drone.
@@ -138,8 +132,53 @@ impl AppConfig {
 
         let config: AppConfig = serde_yaml::from_str(&expanded)
             .map_err(|e| anyhow::anyhow!("Erreur de parsing YAML '{}': {}", path, e))?;
-
+        config.validate()?;
         Ok(config)
+    }
+
+    pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.mcp_server_port <= u16::MAX - 4,
+            "Ports MCP hors limites"
+        );
+        anyhow::ensure!(
+            self.drone.max_altitude.is_finite() && self.drone.max_altitude > 0.0,
+            "Altitude maximale invalide"
+        );
+        anyhow::ensure!(
+            self.drone.max_speed.is_finite() && self.drone.max_speed > 0.0,
+            "Vitesse maximale invalide"
+        );
+        anyhow::ensure!(
+            self.drone.geofence_radius.is_finite() && self.drone.geofence_radius > 0.0,
+            "Geofence invalide"
+        );
+        anyhow::ensure!(
+            self.drone.failsafe_battery_percent.is_finite()
+                && (0.0..=100.0).contains(&self.drone.failsafe_battery_percent),
+            "Seuil batterie invalide"
+        );
+        anyhow::ensure!(
+            self.weather.lat.is_finite()
+                && (-90.0..=90.0).contains(&self.weather.lat)
+                && self.weather.lon.is_finite()
+                && (-180.0..=180.0).contains(&self.weather.lon),
+            "Coordonnées météo invalides"
+        );
+        if self.simulation.enabled {
+            anyhow::ensure!(
+                self.drone.connection_string.starts_with("sim://")
+                    && self.vision.stream_url.starts_with("sim://")
+                    && self.vision.yolo_model_path.starts_with("sim://")
+                    && self.weather.api_key == "sim://openweather",
+                "Simulation incohérente : utiliser uniquement des services sim://"
+            );
+        } else {
+            anyhow::bail!(
+                "Vol réel désactivé : le contrôle MAVLink, la vidéo et l'inférence ne sont pas implémentés. Utiliser config/simulation.yaml pour les essais."
+            );
+        }
+        Ok(())
     }
 
     /// Retourne le port d'un serveur MCP donné (flight=0, vision=1, …).
@@ -150,22 +189,24 @@ impl AppConfig {
 
 /// Substitue les occurrences de `${VAR_NAME}` par la valeur de la variable d'environnement.
 fn expand_env_vars(input: &str) -> String {
-    let mut result = input.to_string();
-    // Recherche des patterns ${...}
-    while let Some(start) = result.find("${") {
-        if let Some(end) = result[start..].find('}') {
-            let var_name = &result[start + 2..start + end];
-            let value = std::env::var(var_name).unwrap_or_default();
-            result = format!(
-                "{}{}{}",
-                &result[..start],
-                value,
-                &result[start + end + 1..]
-            );
+    let mut result = String::new();
+    let mut rest = input;
+    while let Some(start) = rest.find("${") {
+        result.push_str(&rest[..start]);
+        let after = &rest[start + 2..];
+        if let Some(end) = after.find('}') {
+            let value = std::env::var(&after[..end]).unwrap_or_default();
+            // YAML double quoted scalars accept JSON string escapes.
+            let escaped = serde_json::to_string(&value).unwrap_or_else(|_| "\"\"".into());
+            result.push_str(&escaped[1..escaped.len() - 1]);
+            rest = &after[end + 1..];
         } else {
+            result.push_str(&rest[start..]);
+            rest = "";
             break;
         }
     }
+    result.push_str(rest);
     result
 }
 
@@ -178,6 +219,18 @@ mod tests {
         let path = std::env::var("PATH").unwrap_or_default();
         let input = "key: \"${PATH}\"";
         let expanded = expand_env_vars(input);
-        assert_eq!(expanded, format!("key: \"{}\"", path));
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&expanded).unwrap();
+        assert_eq!(parsed["key"].as_str(), Some(path.as_str()));
+    }
+
+    #[test]
+    fn config_rejects_real_mode_and_accepts_simulator() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap();
+        let sim = root.join("config/simulation.yaml");
+        assert!(AppConfig::load(sim.to_str().unwrap()).is_ok());
+        let real = root.join("config/config.yaml");
+        assert!(AppConfig::load(real.to_str().unwrap()).is_err());
     }
 }

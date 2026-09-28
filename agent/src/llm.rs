@@ -17,14 +17,19 @@ pub struct LlmResponse {
 pub struct LlmClient {
     pub config: LlmConfig,
     client: reqwest::Client,
+    simulation: bool,
 }
 
 impl LlmClient {
     /// Initialise le client LLM.
-    pub fn new(config: &LlmConfig) -> Self {
+    pub fn new(config: &LlmConfig, simulation: bool) -> Self {
         Self {
             config: config.clone(),
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(20))
+                .build()
+                .expect("configuration HTTP valide"),
+            simulation,
         }
     }
 
@@ -42,7 +47,7 @@ impl LlmClient {
         }
     }
 
-    /// Envoie une requête de complétion au LLM avec fallback simulé intelligent.
+    /// Envoie une requête de complétion; la simulation doit être explicitement activée.
     pub async fn complete(
         &self,
         system_prompt: &str,
@@ -50,9 +55,11 @@ impl LlmClient {
         _tools: &[McpToolDefinition],
         model: &str,
     ) -> Result<LlmResponse, DroneError> {
-        // Fallback simulation intelligente si pas de clé API valide
-        if self.config.api_key.is_empty() || self.config.api_key == "${OPENROUTER_API_KEY}" {
+        if self.simulation {
             return Ok(self.simulate_llm_response(user_prompt));
+        }
+        if self.config.api_key.is_empty() || self.config.api_key == "${OPENROUTER_API_KEY}" {
+            return Err(DroneError::Llm("OPENROUTER_API_KEY manquante".into()));
         }
 
         let url = format!("{}/chat/completions", self.config.base_url);
@@ -73,7 +80,10 @@ impl LlmClient {
             .client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.config.api_key))
-            .header("HTTP-Referer", "https://github.com/google/antigravity")
+            .header(
+                "HTTP-Referer",
+                "https://github.com/Yusufibin/drone-explorer-rs",
+            )
             .json(&body)
             .send()
             .await
@@ -102,24 +112,13 @@ impl LlmClient {
                             }
                             Err(DroneError::Llm("Réponse LLM vide ou incorrecte".into()))
                         }
-                        Err(e) => {
-                            tracing::error!(
-                                "Erreur de désérialisation de la réponse LLM: {}. Fallback simulation.",
-                                e
-                            );
-                            Ok(self.simulate_llm_response(user_prompt))
-                        }
+                        Err(e) => Err(DroneError::Llm(format!("Réponse LLM invalide: {}", e))),
                     }
                 } else {
-                    let err_text = resp.text().await.unwrap_or_default();
-                    tracing::error!("Erreur HTTP LLM: {}. Fallback simulation.", err_text);
-                    Ok(self.simulate_llm_response(user_prompt))
+                    Err(DroneError::Llm(format!("HTTP LLM: {}", resp.status())))
                 }
             }
-            Err(e) => {
-                tracing::error!("Erreur réseau LLM: {}. Fallback simulation.", e);
-                Ok(self.simulate_llm_response(user_prompt))
-            }
+            Err(e) => Err(DroneError::Llm(format!("Erreur réseau LLM: {}", e))),
         }
     }
 

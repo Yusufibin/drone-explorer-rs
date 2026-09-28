@@ -108,7 +108,7 @@ impl MissionMcpRpcServer for MissionRpcServer {
 
 /// Démarre le serveur mission-mcp.
 pub async fn start_server(db: MissionDatabase, port: u16) -> anyhow::Result<()> {
-    let addr = format!("0.0.0.0:{}", port);
+    let addr = format!("127.0.0.1:{}", port);
     let server = ServerBuilder::default().build(&addr).await?;
 
     let rpc_impl = MissionRpcServer::new(db);

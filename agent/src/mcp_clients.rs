@@ -6,6 +6,18 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use serde_json::{Value, json};
+use std::time::Duration;
+
+fn required_number(args: &Value, key: &str) -> Result<f64, DroneError> {
+    let value = args
+        .get(key)
+        .and_then(Value::as_f64)
+        .ok_or_else(|| DroneError::Mcp(format!("Paramètre numérique requis: {}", key)))?;
+    if !value.is_finite() {
+        return Err(DroneError::Mcp(format!("Paramètre non fini: {}", key)));
+    }
+    Ok(value)
+}
 
 /// Regroupe les clients RPC connectés à tous les serveurs MCP.
 pub struct McpClients {
@@ -21,9 +33,12 @@ impl McpClients {
     pub async fn new(config: &AppConfig) -> Result<Self, DroneError> {
         let build_client = |port: u16| -> Result<HttpClient, DroneError> {
             let url = format!("http://127.0.0.1:{}", port);
-            HttpClientBuilder::default().build(&url).map_err(|e| {
-                DroneError::Mcp(format!("Erreur de connexion client sur '{}': {}", url, e))
-            })
+            HttpClientBuilder::default()
+                .request_timeout(Duration::from_secs(5))
+                .build(&url)
+                .map_err(|e| {
+                    DroneError::Mcp(format!("Erreur de connexion client sur '{}': {}", url, e))
+                })
         };
 
         Ok(Self {
@@ -84,16 +99,13 @@ impl McpClients {
         let mut params = ArrayParams::new();
         match name {
             "takeoff" => {
-                let alt = args
-                    .get("altitude")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(10.0);
+                let alt = required_number(args, "altitude")?;
                 params.insert(alt)?;
             }
             "goto" => {
-                let lat = args.get("lat").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let lon = args.get("lon").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let alt = args.get("alt").and_then(|v| v.as_f64()).unwrap_or(20.0);
+                let lat = required_number(args, "lat")?;
+                let lon = required_number(args, "lon")?;
+                let alt = required_number(args, "alt")?;
                 params.insert(lat)?;
                 params.insert(lon)?;
                 params.insert(alt)?;
@@ -106,10 +118,7 @@ impl McpClients {
                 params.insert(dur)?;
             }
             "set_speed" => {
-                let speed = args
-                    .get("speed_m_s")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(5.0);
+                let speed = required_number(args, "speed_m_s")?;
                 params.insert(speed)?;
             }
             "detect_objects" => {

@@ -63,12 +63,23 @@ impl OpenWeatherClient {
             ));
         }
 
-        let url = format!(
-            "https://api.openweathermap.org/data/2.5/weather?lat={}&lon={}&appid={}&units=metric",
-            self.lat, self.lon, self.api_key
-        );
-
-        match reqwest::get(&url).await {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .map_err(|e| DroneError::Weather(e.to_string()))?;
+        let lat = self.lat.to_string();
+        let lon = self.lon.to_string();
+        match client
+            .get("https://api.openweathermap.org/data/2.5/weather")
+            .query(&[
+                ("lat", lat.as_str()),
+                ("lon", lon.as_str()),
+                ("appid", self.api_key.as_str()),
+                ("units", "metric"),
+            ])
+            .send()
+            .await
+        {
             Ok(resp) => {
                 if resp.status().is_success() {
                     match resp.json::<OpenWeatherResponse>().await {
@@ -107,7 +118,9 @@ impl OpenWeatherClient {
             }
             Err(e) => Err(DroneError::Weather(format!(
                 "Erreur réseau OpenWeatherMap: {}",
-                e
+                e.status()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "connexion ou délai dépassé".into())
             ))),
         }
     }

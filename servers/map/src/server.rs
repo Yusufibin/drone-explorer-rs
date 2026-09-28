@@ -112,7 +112,7 @@ impl MapMcpRpcServer for MapRpcServer {
 
 /// Démarre le serveur map-mcp.
 pub async fn start_server(builder: MapBuilder, port: u16) -> anyhow::Result<()> {
-    let addr = format!("0.0.0.0:{}", port);
+    let addr = format!("127.0.0.1:{}", port);
     let server = ServerBuilder::default().build(&addr).await?;
 
     let rpc_impl = MapRpcServer::new(builder);
